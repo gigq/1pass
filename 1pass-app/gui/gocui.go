@@ -44,10 +44,14 @@ func (gui *GocuiGui) Run(vaultPath string) {
 	}
 
 	defer ui.Close()
-	version := newVerWidget(gui.version, gui.guiControl)
 	help := newHelpWidget()
 	onepass := newOnepassWidget(help, vault, gui.guiControl)
-	ui.SetManager(version, help, onepass)
+	search := newSearchWidget(onepass.applySearch)
+	ui.SetManager(search, help, onepass)
+
+	if err := search.Keybindings(ui); err != nil {
+		log.Fatalln(err)
+	}
 
 	if err := onepass.Keybindings(ui); err != nil {
 		log.Fatalln(err)

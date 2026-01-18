@@ -13,7 +13,8 @@ import (
 
 const (
 	mainHelp string = `Exit: CTRL+Q
-Lock: CTRL+L`
+Lock: CTRL+L
+Search: /`
 )
 
 type helpWidget struct {

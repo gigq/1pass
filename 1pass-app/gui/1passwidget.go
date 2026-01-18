@@ -30,6 +30,7 @@ type onepassWidget struct {
 	passPrompt  *passwordPrompt
 	categories  []*domain.ItemCategory
 	vault       *domain.Vault
+	autoOpen    bool
 	guiControl  in.GuiControl
 }
 
@@ -41,6 +42,7 @@ func newOnepassWidget(helpWidget *helpWidget, vault *domain.Vault, guiControl in
 		helpWidget: helpWidget,
 		categories: make([]*domain.ItemCategory, 0),
 		vault:      vault,
+		autoOpen:   true,
 		guiControl: guiControl,
 	}
 
@@ -101,6 +103,7 @@ func (ow *onepassWidget) cursorUp(ui *gocui.Gui, view *gocui.View) error {
 func (ow *onepassWidget) lock(ui *gocui.Gui, view *gocui.View) error {
 	ow.currIdx = -1
 	ow.categories = make([]*domain.ItemCategory, 0)
+	ow.autoOpen = true
 	ow.guiControl.LockVault()
 
 	if err := ow.resetCursor(view); err != nil {
@@ -167,6 +170,10 @@ func (ow *onepassWidget) unlock(ui *gocui.Gui, view *gocui.View) error {
 		if err := ow.update(ui); err != nil {
 			return err
 		}
+
+		if err := ow.maybeAutoOpen(ui); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -192,11 +199,17 @@ func (ow *onepassWidget) showItems(ui *gocui.Gui, view *gocui.View) error {
 			}
 		}
 
-		ow.itemsWidget.items = items
-
-		if err := ow.itemsWidget.update(ui); err != nil {
+		if err := ow.itemsWidget.SetItems(ui, items); err != nil {
 			return err
 		}
+	}
+
+	return nil
+}
+
+func (ow *onepassWidget) applySearch(ui *gocui.Gui, query string) error {
+	if err := ow.itemsWidget.SetFilter(ui, query); err != nil {
+		return err
 	}
 
 	return nil
@@ -249,6 +262,26 @@ func (ow *onepassWidget) update(ui *gocui.Gui) error {
 		}
 	} else {
 		if err := ow.promptForPassword(ui); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (ow *onepassWidget) maybeAutoOpen(ui *gocui.Gui) error {
+	if !ow.autoOpen || !ow.guiControl.IsVaultUnlocked() || ow.currIdx == -1 {
+		return nil
+	}
+
+	ow.autoOpen = false
+
+	if err := ow.showItems(ui, nil); err != nil {
+		return err
+	}
+
+	if _, err := ui.View("searchWidget"); err == nil {
+		if _, err := ui.SetCurrentView("searchWidget"); err != nil {
 			return err
 		}
 	}
@@ -329,6 +362,10 @@ func (ow *onepassWidget) Layout(ui *gocui.Gui) error {
 		ow.helpWidget.help = onepassHelp
 
 		if err := ow.helpWidget.update(ui); err != nil {
+			return err
+		}
+
+		if err := ow.maybeAutoOpen(ui); err != nil {
 			return err
 		}
 	}

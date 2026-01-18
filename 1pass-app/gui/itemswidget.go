@@ -6,6 +6,7 @@ package gui
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/jroimartin/gocui"
 	"github.com/mashmb/1pass/1pass-core/core/domain"
@@ -27,6 +28,8 @@ type itemsWidget struct {
 	detailsWidget *detailsWidget
 	helpWidget    *helpWidget
 	items         []*domain.SimpleItem
+	allItems      []*domain.SimpleItem
+	filter        string
 	guiControl    in.GuiControl
 }
 
@@ -38,6 +41,7 @@ func newItemsWidget(parent string, helpWidget *helpWidget, lockHandler func(ui *
 		lockHandler: lockHandler,
 		helpWidget:  helpWidget,
 		items:       make([]*domain.SimpleItem, 0),
+		allItems:    make([]*domain.SimpleItem, 0),
 		parent:      parent,
 		guiControl:  guiControl,
 	}
@@ -45,6 +49,49 @@ func newItemsWidget(parent string, helpWidget *helpWidget, lockHandler func(ui *
 	widget.detailsWidget = newDetailsWidget(widget.name, widget.helpWidget, widget.lock)
 
 	return widget
+}
+
+func (iw *itemsWidget) SetItems(ui *gocui.Gui, items []*domain.SimpleItem) error {
+	iw.allItems = items
+	iw.applyFilter()
+
+	return iw.update(ui)
+}
+
+func (iw *itemsWidget) SetFilter(ui *gocui.Gui, filter string) error {
+	iw.filter = filter
+	iw.applyFilter()
+
+	if _, err := ui.View(iw.name); err != nil {
+		if err == gocui.ErrUnknownView {
+			return nil
+		}
+
+		return err
+	}
+
+	return iw.update(ui)
+}
+
+func (iw *itemsWidget) applyFilter() {
+	query := strings.ToLower(strings.TrimSpace(iw.filter))
+
+	if query == "" {
+		iw.items = iw.allItems
+		return
+	}
+
+	filtered := make([]*domain.SimpleItem, 0, len(iw.allItems))
+
+	for _, item := range iw.allItems {
+		title := strings.ToLower(item.Title)
+
+		if strings.Contains(title, query) {
+			filtered = append(filtered, item)
+		}
+	}
+
+	iw.items = filtered
 }
 
 func (iw *itemsWidget) cursorDown(ui *gocui.Gui, view *gocui.View) error {
@@ -179,6 +226,7 @@ func (iw *itemsWidget) update(ui *gocui.Gui) error {
 	}
 
 	iw.currIdx = -1
+	iw.detailsWidget.item = nil
 
 	if err := iw.resetCursor(view); err != nil {
 		return err
@@ -201,6 +249,10 @@ func (iw *itemsWidget) update(ui *gocui.Gui) error {
 		iw.currIdx = 0
 
 		if err := iw.showOverview(ui); err != nil {
+			return err
+		}
+	} else {
+		if err := iw.detailsWidget.update(true, ui); err != nil {
 			return err
 		}
 	}
