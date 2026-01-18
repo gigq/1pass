@@ -63,35 +63,46 @@ func (s *dfltItemService) DecodeItems(vault *domain.Vault, keys *domain.Keys) {
 			overviewJson := s.DecodeOverview(encoded, keys)
 			detailsJson := s.DecodeDetails(encoded, keys)
 			sections := make([]*domain.ItemSection, 0)
+			var fieldsSection *domain.ItemSection
 
-			if detailsJson["sections"] == nil {
-				if detailsJson["fields"] != nil {
-					fieldsJson := detailsJson["fields"].([]interface{})
-					fields := make([]*domain.ItemField, 0)
-
-					for _, fieldJson := range fieldsJson {
-						field := s.ParseItemField(false, fieldJson.(map[string]interface{}))
-
-						if field != nil {
-							fields = append(fields, field)
-						}
+			if sectionsRaw, ok := detailsJson["sections"].([]interface{}); ok {
+				for _, sectionRaw := range sectionsRaw {
+					sectionMap, ok := sectionRaw.(map[string]interface{})
+					if !ok {
+						continue
 					}
 
-					if len(fields) != 0 {
-						section := domain.NewItemSection("", fields)
-						sections = append(sections, section)
-					}
-				}
-			} else {
-				sectionsJson := detailsJson["sections"].([]interface{})
-
-				for _, sectionJson := range sectionsJson {
-					section := s.ParseItemSection(sectionJson.(map[string]interface{}))
+					section := s.ParseItemSection(sectionMap)
 
 					if section != nil {
 						sections = append(sections, section)
 					}
 				}
+			}
+
+			if fieldsRaw, ok := detailsJson["fields"].([]interface{}); ok {
+				fields := make([]*domain.ItemField, 0)
+
+				for _, fieldRaw := range fieldsRaw {
+					fieldMap, ok := fieldRaw.(map[string]interface{})
+					if !ok {
+						continue
+					}
+
+					field := s.ParseItemField(false, fieldMap)
+
+					if field != nil {
+						fields = append(fields, field)
+					}
+				}
+
+				if len(fields) != 0 {
+					fieldsSection = domain.NewItemSection("", fields)
+				}
+			}
+
+			if fieldsSection != nil {
+				sections = append([]*domain.ItemSection{fieldsSection}, sections...)
 			}
 
 			var title string
@@ -163,13 +174,27 @@ func (s *dfltItemService) ParseItemField(fromSection bool, data map[string]inter
 	var value string
 
 	if !fromSection {
-		if data["value"] != nil && data["name"] != nil {
-			value = data["value"].(string)
-			name := data["name"].(string)
+		if data["value"] != nil {
+			value = fmt.Sprint(data["value"])
+		}
 
-			if value != "" && name != "" {
-				field = domain.NewItemField(strings.Title(name), value)
+		name := ""
+
+		if data["designation"] != nil {
+			if designation, ok := data["designation"].(string); ok {
+				name = designation
 			}
+		}
+
+		if name == "" && data["name"] != nil {
+			if rawName, ok := data["name"].(string); ok {
+				name = rawName
+			}
+		}
+
+		if value != "" && name != "" {
+			name = strings.ReplaceAll(name, "_", " ")
+			field = domain.NewItemField(strings.Title(name), value)
 		}
 	} else {
 		if data["v"] != nil {

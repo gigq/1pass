@@ -155,6 +155,20 @@ If default OPVault is not configured, [-v, --vault] flag is needed.`,
 	newCmd.Flags().StringVarP(&cli.vault, "vault", "v", "", "OPVault path")
 	newCmd.Flags().StringVarP(&cli.category, "category", "c", "", "item category (name or 3-digit code)")
 
+	debugCmd := &cobra.Command{
+		Use:   "debug [UID]",
+		Short: "Print decrypted item payload for debugging",
+		Long: `Print decrypted overview/details JSON plus parsed fields.
+If default OPVault is not configured, [-v, --vault] flag is needed.`,
+		Args: cobra.ExactArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			cli.cliControl.DebugItem(cli.vault, args[0], cli.trashed)
+		},
+	}
+
+	debugCmd.Flags().StringVarP(&cli.vault, "vault", "v", "", "OPVault path")
+	debugCmd.Flags().BoolVarP(&cli.trashed, "trashed", "t", false, "debug trashed items")
+
 	versionCmd := &cobra.Command{
 		Use:   "version",
 		Short: "Check application version",
@@ -172,6 +186,7 @@ If default OPVault is not configured, [-v, --vault] flag is needed.`,
 	rootCmd.AddCommand(detailsCmd)
 	rootCmd.AddCommand(editCmd)
 	rootCmd.AddCommand(newCmd)
+	rootCmd.AddCommand(debugCmd)
 	rootCmd.AddCommand(versionCmd)
 
 	return rootCmd

@@ -467,8 +467,6 @@ func buildFormFields(overview, details map[string]interface{}) []formField {
 				})
 			}
 		}
-
-		return fields
 	}
 
 	if fieldsRaw, ok := details["fields"].([]interface{}); ok {
@@ -478,7 +476,15 @@ func buildFormFields(overview, details map[string]interface{}) []formField {
 				continue
 			}
 
-			label := strings.Title(stringValue(fieldMap["name"]))
+			labelName := stringValue(fieldMap["designation"])
+			if labelName == "" {
+				labelName = stringValue(fieldMap["name"])
+			}
+			if labelName == "" {
+				continue
+			}
+			labelName = strings.ReplaceAll(labelName, "_", " ")
+			label := strings.Title(labelName)
 			fields = append(fields, formField{
 				kind:     fieldValue,
 				label:    label,

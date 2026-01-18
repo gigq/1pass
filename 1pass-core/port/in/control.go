@@ -27,6 +27,8 @@ type CliControl interface {
 
 	NewItem(vaultPath, category string)
 
+	DebugItem(vaultPath, uid string, trashed bool)
+
 	Update()
 }
 

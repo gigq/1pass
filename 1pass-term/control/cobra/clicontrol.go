@@ -618,6 +618,68 @@ func isReservedMetaKey(key string) bool {
 	}
 }
 
+func (ctrl *cobraCliControl) DebugItem(vaultPath, uid string, trashed bool) {
+	ctrl.FirstRun()
+	ctrl.CheckForUpdate()
+	var vault *domain.Vault
+
+	if vaultPath != "" {
+		vault = domain.NewVault(vaultPath)
+	} else {
+		config := ctrl.configFacade.GetConfig()
+		vault = domain.NewVault(config.Vault)
+	}
+
+	err := ctrl.vaultFacade.Validate(vault)
+
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
+	fmt.Println("Password:")
+	password, err := term.ReadPassword(int(syscall.Stdin))
+	err = ctrl.vaultFacade.Unlock(vault, string(password))
+
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
+	item := ctrl.vaultFacade.GetItem(uid, trashed)
+
+	if item == nil {
+		fmt.Println(fmt.Sprintf("Item with UID %v do not exist", uid))
+		return
+	}
+
+	fmt.Println("=== Debug Item ===")
+	fmt.Println(fmt.Sprintf("UID: %v", item.Uid))
+	fmt.Println(fmt.Sprintf("Category: %v", item.Category.GetName()))
+	fmt.Println(fmt.Sprintf("Trashed: %v", item.Trashed))
+
+	overview, _ := json.MarshalIndent(item.Overview, "", "  ")
+	details, _ := json.MarshalIndent(item.Details, "", "  ")
+
+	fmt.Println("\n--- Overview JSON ---")
+	fmt.Println(string(overview))
+	fmt.Println("\n--- Details JSON ---")
+	fmt.Println(string(details))
+
+	fmt.Println("\n--- Parsed Sections ---")
+	sections := buildDebugSections(item.Sections)
+	sectionsJson, _ := json.MarshalIndent(sections, "", "  ")
+	fmt.Println(string(sectionsJson))
+
+	fmt.Println("\n--- Notes ---")
+	fmt.Println(item.Notes)
+
+	fmt.Println("\n--- Raw Meta ---")
+	meta := rawMeta(item.Raw)
+	metaJson, _ := json.MarshalIndent(meta, "", "  ")
+	fmt.Println(string(metaJson))
+}
+
 func (ctrl *cobraCliControl) Update() {
 	fmt.Println("Checking for 1pass application updates...")
 
@@ -677,4 +739,45 @@ func (ctrl *cobraCliControl) Update() {
 	}
 
 	fmt.Println(fmt.Sprintf("1pass application updated to version %v", info.Version))
+}
+
+func buildDebugSections(sections []*domain.ItemSection) []map[string]interface{} {
+	result := make([]map[string]interface{}, 0)
+
+	for _, section := range sections {
+		entry := make(map[string]interface{})
+		entry["title"] = section.Title
+
+		fields := make([]map[string]interface{}, 0)
+
+		for _, field := range section.Fields {
+			fields = append(fields, map[string]interface{}{
+				"name":  field.Name,
+				"value": field.Value,
+			})
+		}
+
+		entry["fields"] = fields
+		result = append(result, entry)
+	}
+
+	return result
+}
+
+func rawMeta(raw map[string]interface{}) map[string]interface{} {
+	if raw == nil {
+		return nil
+	}
+
+	meta := make(map[string]interface{})
+
+	for key, value := range raw {
+		if key == "d" || key == "o" || key == "k" || key == "hmac" {
+			continue
+		}
+
+		meta[key] = value
+	}
+
+	return meta
 }
