@@ -52,6 +52,14 @@ func (ctrl *gocuiGuiControl) Unlock(vault *domain.Vault, password string) error 
 	return ctrl.vaultFacade.Unlock(vault, password)
 }
 
+func (ctrl *gocuiGuiControl) UpdateItem(vault *domain.Vault, item *domain.Item, payload *domain.ItemPayload) (*domain.Item, error) {
+	return ctrl.vaultFacade.UpdateItem(vault, item, payload)
+}
+
+func (ctrl *gocuiGuiControl) CreateItem(vault *domain.Vault, payload *domain.ItemPayload) (*domain.Item, error) {
+	return ctrl.vaultFacade.CreateItem(vault, payload)
+}
+
 func (ctrl *gocuiGuiControl) ValidateVault(vaultPath string) (*domain.Vault, error) {
 	var vault *domain.Vault
 

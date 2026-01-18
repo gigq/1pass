@@ -23,6 +23,10 @@ type CliControl interface {
 
 	GetItems(vaultPath, category, title string, trashed bool)
 
+	EditItem(vaultPath, uid string, trashed bool)
+
+	NewItem(vaultPath, category string)
+
 	Update()
 }
 
@@ -40,6 +44,10 @@ type GuiControl interface {
 	LockVault()
 
 	Unlock(vault *domain.Vault, password string) error
+
+	UpdateItem(vault *domain.Vault, item *domain.Item, payload *domain.ItemPayload) (*domain.Item, error)
+
+	CreateItem(vault *domain.Vault, payload *domain.ItemPayload) (*domain.Item, error)
 
 	ValidateVault(vaultPath string) (*domain.Vault, error)
 }

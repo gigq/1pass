@@ -114,6 +114,9 @@ func (repo *fileItemRepo) LoadItems(vault *domain.Vault) []*domain.RawItem {
 
 		for uid, value := range itemsJson {
 			v := value.(map[string]interface{})
+			if v["uuid"] == nil {
+				v["uuid"] = uid
+			}
 			created := int64(v["created"].(float64))
 			updated := int64(v["updated"].(float64))
 			trashed := false
@@ -124,6 +127,7 @@ func (repo *fileItemRepo) LoadItems(vault *domain.Vault) []*domain.RawItem {
 
 			item := domain.NewRawItem(v["category"].(string), v["d"].(string), v["hmac"].(string), v["k"].(string),
 				v["o"].(string), uid, created, updated, trashed)
+			item.Raw = v
 			items = append(items, item)
 		}
 	}
@@ -138,7 +142,41 @@ func (repo *fileItemRepo) RemoveItems() {
 }
 
 func (repo *fileItemRepo) StoreItems(items []*domain.Item) {
-	if repo.items == nil {
-		repo.items = items
+	repo.items = items
+}
+
+func (repo *fileItemRepo) SaveItem(vault *domain.Vault, uid string, item map[string]interface{}) error {
+	if vault == nil {
+		return domain.ErrInvalidVault
 	}
+
+	if uid == "" {
+		return domain.ErrInvalidPayload
+	}
+
+	band := strings.ToUpper(uid[:1])
+	bandFile := filepath.Join(vault.Path, domain.ProfileDir, "band_"+band+".js")
+	itemsJson := make(map[string]interface{})
+
+	if file, err := ioutil.ReadFile(bandFile); err == nil {
+		content := strings.TrimSpace(string(file))
+		content = strings.TrimPrefix(content, "ld(")
+		content = strings.TrimSuffix(content, ");")
+
+		if content != "" {
+			if err := json.Unmarshal([]byte(content), &itemsJson); err != nil {
+				return err
+			}
+		}
+	}
+
+	itemsJson[uid] = item
+
+	payload, err := json.Marshal(itemsJson)
+	if err != nil {
+		return err
+	}
+
+	content := "ld(" + string(payload) + ");"
+	return ioutil.WriteFile(bandFile, []byte(content), 0644)
 }

@@ -14,7 +14,10 @@ type Config struct {
 type Item struct {
 	Category *ItemCategory
 	Created  int64
+	Details  map[string]interface{}
 	Notes    string
+	Overview map[string]interface{}
+	Raw      map[string]interface{}
 	Title    string
 	Trashed  bool
 	Sections []*ItemSection
@@ -52,6 +55,13 @@ type RawItem struct {
 	Trashed  bool
 	Uid      string
 	Updated  int64
+	Raw      map[string]interface{}
+}
+
+type ItemPayload struct {
+	Details  map[string]interface{}
+	Meta     map[string]interface{}
+	Overview map[string]interface{}
 }
 
 type SimpleItem struct {

@@ -54,6 +54,50 @@ func (f *dfltVaultFacade) Lock() {
 	f.keys = nil
 }
 
+func (f *dfltVaultFacade) UpdateItem(vault *domain.Vault, item *domain.Item, payload *domain.ItemPayload) (*domain.Item, error) {
+	if f.keys == nil {
+		return nil, domain.ErrVaultLocked
+	}
+
+	if err := f.itemService.UpdateItem(vault, f.keys, item, payload); err != nil {
+		return nil, err
+	}
+
+	f.itemService.ClearMemory()
+	f.itemService.DecodeItems(vault, f.keys)
+
+	updated := f.itemService.GetItem(item.Uid, false)
+
+	if updated == nil {
+		updated = f.itemService.GetItem(item.Uid, true)
+	}
+
+	return updated, nil
+}
+
+func (f *dfltVaultFacade) CreateItem(vault *domain.Vault, payload *domain.ItemPayload) (*domain.Item, error) {
+	if f.keys == nil {
+		return nil, domain.ErrVaultLocked
+	}
+
+	uid, err := f.itemService.CreateItem(vault, f.keys, payload)
+
+	if err != nil {
+		return nil, err
+	}
+
+	f.itemService.ClearMemory()
+	f.itemService.DecodeItems(vault, f.keys)
+
+	created := f.itemService.GetItem(uid, false)
+
+	if created == nil {
+		created = f.itemService.GetItem(uid, true)
+	}
+
+	return created, nil
+}
+
 func (f *dfltVaultFacade) Unlock(vault *domain.Vault, password string) error {
 	derivedKey, derivedMac, err := f.keyService.DerivedKeys(password)
 

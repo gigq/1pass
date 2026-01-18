@@ -46,9 +46,9 @@ func newOnepassWidget(helpWidget *helpWidget, vault *domain.Vault, guiControl in
 		guiControl: guiControl,
 	}
 
-	widget.errDialog = newErrorDialog(widget.closeError)
+	widget.errDialog = newErrorDialog("errDialog", widget.closeError)
 	widget.passPrompt = newPasswordPrompt(widget.unlock)
-	widget.itemsWidget = newItemsWidget(widget.name, helpWidget, widget.lock, widget.guiControl)
+	widget.itemsWidget = newItemsWidget(widget.name, helpWidget, vault, widget.lock, widget.guiControl)
 
 	return widget
 }
@@ -186,20 +186,25 @@ func (ow *onepassWidget) showItems(ui *gocui.Gui, view *gocui.View) error {
 		}
 
 		var items []*domain.SimpleItem
+		var selectedCategory *domain.ItemCategory
+		selectedTrashed := false
 
 		if len(ow.categories) == 1 {
 			items = ow.guiControl.GetItems(nil, true)
+			selectedTrashed = true
 		} else {
 			if ow.currIdx == len(ow.categories)-1 {
 				items = ow.guiControl.GetItems(nil, true)
+				selectedTrashed = true
 			} else if ow.currIdx == 0 {
 				items = ow.guiControl.GetItems(nil, false)
 			} else {
-				items = ow.guiControl.GetItems(ow.categories[ow.currIdx], false)
+				selectedCategory = ow.categories[ow.currIdx]
+				items = ow.guiControl.GetItems(selectedCategory, false)
 			}
 		}
 
-		if err := ow.itemsWidget.SetItems(ui, items); err != nil {
+		if err := ow.itemsWidget.SetItems(ui, items, selectedCategory, selectedTrashed); err != nil {
 			return err
 		}
 	}

@@ -33,6 +33,8 @@ type ItemRepo interface {
 
 	RemoveItems()
 
+	SaveItem(vault *domain.Vault, uid string, item map[string]interface{}) error
+
 	StoreItems(items []*domain.Item)
 }
 

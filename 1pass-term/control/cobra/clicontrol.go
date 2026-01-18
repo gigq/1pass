@@ -5,8 +5,11 @@
 package cobra
 
 import (
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"os"
+	"os/exec"
 	"sort"
 	"strconv"
 	"strings"
@@ -343,6 +346,275 @@ func (ctrl *cobraCliControl) GetItems(vaultPath, category, title string, trashed
 	} else {
 		msg := fmt.Sprintf("No results for search (category: %v, name: %v, trashed: %v)", category, title, trashed)
 		fmt.Println(msg)
+	}
+}
+
+func (ctrl *cobraCliControl) EditItem(vaultPath, uid string, trashed bool) {
+	ctrl.FirstRun()
+	ctrl.CheckForUpdate()
+	var vault *domain.Vault
+
+	if vaultPath != "" {
+		vault = domain.NewVault(vaultPath)
+	} else {
+		config := ctrl.configFacade.GetConfig()
+		vault = domain.NewVault(config.Vault)
+	}
+
+	err := ctrl.vaultFacade.Validate(vault)
+
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
+	fmt.Println("Password:")
+	password, err := term.ReadPassword(int(syscall.Stdin))
+	err = ctrl.vaultFacade.Unlock(vault, string(password))
+
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
+	item := ctrl.vaultFacade.GetItem(uid, trashed)
+
+	if item == nil {
+		fmt.Println(fmt.Sprintf("Item with UID %v do not exist", uid))
+		return
+	}
+
+	payloadMap := payloadFromItem(item)
+	edited, err := editJson(payloadMap)
+
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	payload, err := payloadFromMap(edited)
+
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	if _, err := ctrl.vaultFacade.UpdateItem(vault, item, payload); err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	fmt.Println("Item updated.")
+}
+
+func (ctrl *cobraCliControl) NewItem(vaultPath, category string) {
+	ctrl.FirstRun()
+	ctrl.CheckForUpdate()
+	var vault *domain.Vault
+
+	if vaultPath != "" {
+		vault = domain.NewVault(vaultPath)
+	} else {
+		config := ctrl.configFacade.GetConfig()
+		vault = domain.NewVault(config.Vault)
+	}
+
+	err := ctrl.vaultFacade.Validate(vault)
+
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
+	fmt.Println("Password:")
+	password, err := term.ReadPassword(int(syscall.Stdin))
+	err = ctrl.vaultFacade.Unlock(vault, string(password))
+
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
+	template := newItemTemplate(category)
+	edited, err := editJson(template)
+
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	payload, err := payloadFromMap(edited)
+
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	item, err := ctrl.vaultFacade.CreateItem(vault, payload)
+
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	if item != nil {
+		fmt.Println(fmt.Sprintf("Item created: %v", item.Uid))
+	} else {
+		fmt.Println("Item created.")
+	}
+}
+
+func newItemTemplate(category string) map[string]interface{} {
+	if strings.TrimSpace(category) == "" {
+		category = domain.ItemCategoryEnum.SecureNote.GetCode()
+	}
+
+	overview := make(map[string]interface{})
+	overview["title"] = "New Item"
+	overview["url"] = ""
+
+	details := make(map[string]interface{})
+	details["notesPlain"] = ""
+	details["sections"] = make([]interface{}, 0)
+
+	payload := make(map[string]interface{})
+	payload["category"] = category
+	payload["overview"] = overview
+	payload["details"] = details
+	payload["trashed"] = false
+
+	return payload
+}
+
+func payloadFromItem(item *domain.Item) map[string]interface{} {
+	payload := make(map[string]interface{})
+
+	if item.Raw != nil {
+		for key, value := range item.Raw {
+			if isReservedMetaKey(key) {
+				continue
+			}
+
+			payload[key] = value
+		}
+	} else {
+		payload["uuid"] = item.Uid
+		payload["category"] = item.Category.GetCode()
+		payload["created"] = item.Created
+		payload["updated"] = item.Updated
+		payload["trashed"] = item.Trashed
+	}
+
+	overview := item.Overview
+	if overview == nil {
+		overview = make(map[string]interface{})
+	}
+
+	details := item.Details
+	if details == nil {
+		details = make(map[string]interface{})
+	}
+
+	payload["overview"] = overview
+	payload["details"] = details
+
+	return payload
+}
+
+func payloadFromMap(data map[string]interface{}) (*domain.ItemPayload, error) {
+	if data == nil {
+		return nil, domain.ErrInvalidPayload
+	}
+
+	overview, ok := data["overview"].(map[string]interface{})
+
+	if !ok {
+		return nil, domain.ErrInvalidPayload
+	}
+
+	details, ok := data["details"].(map[string]interface{})
+
+	if !ok {
+		return nil, domain.ErrInvalidPayload
+	}
+
+	delete(data, "overview")
+	delete(data, "details")
+	delete(data, "hmac")
+	delete(data, "k")
+	delete(data, "d")
+	delete(data, "o")
+
+	return &domain.ItemPayload{
+		Overview: overview,
+		Details:  details,
+		Meta:     data,
+	}, nil
+}
+
+func editJson(data map[string]interface{}) (map[string]interface{}, error) {
+	file, err := ioutil.TempFile("", "1pass-edit-*.json")
+
+	if err != nil {
+		return nil, err
+	}
+
+	defer os.Remove(file.Name())
+
+	body, err := json.MarshalIndent(data, "", "  ")
+
+	if err != nil {
+		return nil, err
+	}
+
+	if _, err := file.Write(body); err != nil {
+		return nil, err
+	}
+
+	if err := file.Close(); err != nil {
+		return nil, err
+	}
+
+	editor := os.Getenv("EDITOR")
+
+	if strings.TrimSpace(editor) == "" {
+		editor = "vi"
+	}
+
+	cmd := exec.Command("sh", "-c", editor+" "+file.Name())
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Run(); err != nil {
+		return nil, err
+	}
+
+	updated, err := ioutil.ReadFile(file.Name())
+
+	if err != nil {
+		return nil, err
+	}
+
+	if len(strings.TrimSpace(string(updated))) == 0 {
+		return nil, domain.ErrInvalidPayload
+	}
+
+	var result map[string]interface{}
+
+	if err := json.Unmarshal(updated, &result); err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
+func isReservedMetaKey(key string) bool {
+	switch key {
+	case "d", "o", "k", "hmac":
+		return true
+	default:
+		return false
 	}
 }
 

@@ -29,6 +29,10 @@ type VaultFacade interface {
 
 	Unlock(vault *domain.Vault, password string) error
 
+	UpdateItem(vault *domain.Vault, item *domain.Item, payload *domain.ItemPayload) (*domain.Item, error)
+
+	CreateItem(vault *domain.Vault, payload *domain.ItemPayload) (*domain.Item, error)
+
 	Validate(vault *domain.Vault) error
 }
 

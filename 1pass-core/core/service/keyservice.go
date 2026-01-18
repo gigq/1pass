@@ -9,6 +9,7 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/hmac"
+	"crypto/rand"
 	"crypto/sha256"
 	"crypto/sha512"
 	"encoding/base64"
@@ -65,6 +66,25 @@ func (s *dfltKeyService) DecodeData(key, initVector, data []byte) ([]byte, error
 	return data, nil
 }
 
+func (s *dfltKeyService) EncodeData(key, initVector, data []byte) ([]byte, error) {
+	block, err := aes.NewCipher(key)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if len(data)%aes.BlockSize != 0 {
+		return nil, domain.ErrInvalidPayload
+	}
+
+	encoded := make([]byte, len(data))
+	copy(encoded, data)
+	mode := cipher.NewCBCEncrypter(block, initVector)
+	mode.CryptBlocks(encoded, encoded)
+
+	return encoded, nil
+}
+
 func (s *dfltKeyService) DecodeKeys(key, derivedKey, derivedMac []byte) ([]byte, []byte, error) {
 	base, err := s.DecodeOpdata(key, derivedKey, derivedMac)
 
@@ -106,6 +126,51 @@ func (s *dfltKeyService) DecodeOpdata(cipherText, key, macKey []byte) ([]byte, e
 	return plain[len(plain)-int(plainSize):], nil
 }
 
+func (s *dfltKeyService) EncodeOpdata(plain, key, macKey []byte) ([]byte, error) {
+	paddingSize := aes.BlockSize - (len(plain) % aes.BlockSize)
+
+	if paddingSize == 0 {
+		paddingSize = aes.BlockSize
+	}
+
+	padding := make([]byte, paddingSize)
+
+	if _, err := rand.Read(padding); err != nil {
+		return nil, err
+	}
+
+	padded := append(padding, plain...)
+	initVector := make([]byte, aes.BlockSize)
+
+	if _, err := rand.Read(initVector); err != nil {
+		return nil, err
+	}
+
+	cipherText, err := s.EncodeData(key, initVector, padded)
+
+	if err != nil {
+		return nil, err
+	}
+
+	header := []byte("opdata01")
+	size := make([]byte, 8)
+	binary.LittleEndian.PutUint64(size, uint64(len(plain)))
+	data := append(header, size...)
+	data = append(data, initVector...)
+	data = append(data, cipherText...)
+
+	hash := hmac.New(sha256.New, macKey)
+
+	if _, err := hash.Write(data); err != nil {
+		return nil, err
+	}
+
+	mac := hash.Sum(nil)
+	data = append(data, mac...)
+
+	return data, nil
+}
+
 func (s *dfltKeyService) DerivedKeys(password string) ([]byte, []byte, error) {
 	iterations := s.profileRepo.GetIterations()
 	salt, err := base64.StdEncoding.DecodeString(s.profileRepo.GetSalt())
@@ -117,6 +182,37 @@ func (s *dfltKeyService) DerivedKeys(password string) ([]byte, []byte, error) {
 	keys := s.cryptoUtils.DeriveKey([]byte(password), salt, iterations, 64, sha512.New)
 
 	return keys[:32], keys[32:], nil
+}
+
+func (s *dfltKeyService) EncryptItemKeys(itemKey, itemMac []byte, keys *domain.Keys) ([]byte, error) {
+	if len(itemKey) != 32 || len(itemMac) != 32 {
+		return nil, domain.ErrInvalidPayload
+	}
+
+	initVector := make([]byte, aes.BlockSize)
+
+	if _, err := rand.Read(initVector); err != nil {
+		return nil, err
+	}
+
+	plain := append(itemKey, itemMac...)
+	encrypted, err := s.EncodeData(keys.MasterKey, initVector, plain)
+
+	if err != nil {
+		return nil, err
+	}
+
+	data := append(initVector, encrypted...)
+	hash := hmac.New(sha256.New, keys.MasterMac)
+
+	if _, err := hash.Write(data); err != nil {
+		return nil, err
+	}
+
+	mac := hash.Sum(nil)
+	data = append(data, mac...)
+
+	return data, nil
 }
 
 func (s *dfltKeyService) ItemKeys(item *domain.RawItem, keys *domain.Keys) ([]byte, []byte) {

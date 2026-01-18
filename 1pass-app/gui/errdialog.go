@@ -17,9 +17,13 @@ type errorDialog struct {
 	err          error
 }
 
-func newErrorDialog(closeHandler func(ui *gocui.Gui, view *gocui.View) error) *errorDialog {
+func newErrorDialog(name string, closeHandler func(ui *gocui.Gui, view *gocui.View) error) *errorDialog {
+	if name == "" {
+		name = "errDialog"
+	}
+
 	return &errorDialog{
-		name:         "errDialog",
+		name:         name,
 		title:        "Error",
 		closeHandler: closeHandler,
 	}

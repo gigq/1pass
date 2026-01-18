@@ -16,7 +16,9 @@ import (
 const (
 	itemsHelp string = `Navigate up/down: k/j
 Go back: Q
-Reveal item: TAB`
+Reveal item: TAB
+Edit item: E
+New item: N`
 )
 
 type itemsWidget struct {
@@ -26,14 +28,18 @@ type itemsWidget struct {
 	title         string
 	lockHandler   func(ui *gocui.Gui, view *gocui.View) error
 	detailsWidget *detailsWidget
+	editWidget    *editWidget
 	helpWidget    *helpWidget
 	items         []*domain.SimpleItem
 	allItems      []*domain.SimpleItem
+	category      *domain.ItemCategory
 	filter        string
+	trashed       bool
 	guiControl    in.GuiControl
+	vault         *domain.Vault
 }
 
-func newItemsWidget(parent string, helpWidget *helpWidget, lockHandler func(ui *gocui.Gui, view *gocui.View) error, guiControl in.GuiControl) *itemsWidget {
+func newItemsWidget(parent string, helpWidget *helpWidget, vault *domain.Vault, lockHandler func(ui *gocui.Gui, view *gocui.View) error, guiControl in.GuiControl) *itemsWidget {
 	widget := &itemsWidget{
 		currIdx:     -1,
 		name:        "itemsWidget",
@@ -44,14 +50,18 @@ func newItemsWidget(parent string, helpWidget *helpWidget, lockHandler func(ui *
 		allItems:    make([]*domain.SimpleItem, 0),
 		parent:      parent,
 		guiControl:  guiControl,
+		vault:       vault,
 	}
 
 	widget.detailsWidget = newDetailsWidget(widget.name, widget.helpWidget, widget.lock)
+	widget.editWidget = newEditWidget(widget.name, widget.helpWidget, widget.vault, widget.guiControl, widget.refresh)
 
 	return widget
 }
 
-func (iw *itemsWidget) SetItems(ui *gocui.Gui, items []*domain.SimpleItem) error {
+func (iw *itemsWidget) SetItems(ui *gocui.Gui, items []*domain.SimpleItem, category *domain.ItemCategory, trashed bool) error {
+	iw.category = category
+	iw.trashed = trashed
 	iw.allItems = items
 	iw.applyFilter()
 
@@ -71,6 +81,11 @@ func (iw *itemsWidget) SetFilter(ui *gocui.Gui, filter string) error {
 	}
 
 	return iw.update(ui)
+}
+
+func (iw *itemsWidget) refresh(ui *gocui.Gui) error {
+	items := iw.guiControl.GetItems(iw.category, iw.trashed)
+	return iw.SetItems(ui, items, iw.category, iw.trashed)
 }
 
 func (iw *itemsWidget) applyFilter() {
@@ -218,6 +233,36 @@ func (iw *itemsWidget) toggleDetails(ui *gocui.Gui, view *gocui.View) error {
 	return nil
 }
 
+func (iw *itemsWidget) editItem(ui *gocui.Gui, view *gocui.View) error {
+	if iw.currIdx == -1 || iw.currIdx >= len(iw.items) {
+		return nil
+	}
+
+	item := iw.guiControl.GetItem(iw.items[iw.currIdx])
+
+	if item == nil {
+		return nil
+	}
+
+	payload := payloadFromItem(item)
+
+	if err := iw.editWidget.Open(ui, item, payload); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (iw *itemsWidget) newItem(ui *gocui.Gui, view *gocui.View) error {
+	payload := newItemTemplate(iw.category)
+
+	if err := iw.editWidget.Open(ui, nil, payload); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (iw *itemsWidget) update(ui *gocui.Gui) error {
 	view, err := ui.View(iw.name)
 
@@ -265,6 +310,10 @@ func (iw *itemsWidget) Keybindings(ui *gocui.Gui) error {
 		return err
 	}
 
+	if err := iw.editWidget.Keybindings(ui); err != nil {
+		return err
+	}
+
 	if err := ui.SetKeybinding(iw.name, gocui.KeyCtrlL, gocui.ModNone, iw.lock); err != nil {
 		return err
 	}
@@ -298,6 +347,22 @@ func (iw *itemsWidget) Keybindings(ui *gocui.Gui) error {
 	}
 
 	if err := ui.SetKeybinding(iw.name, gocui.KeyTab, gocui.ModNone, iw.toggleDetails); err != nil {
+		return err
+	}
+
+	if err := ui.SetKeybinding(iw.name, 'e', gocui.ModNone, iw.editItem); err != nil {
+		return err
+	}
+
+	if err := ui.SetKeybinding(iw.name, 'E', gocui.ModNone, iw.editItem); err != nil {
+		return err
+	}
+
+	if err := ui.SetKeybinding(iw.name, 'n', gocui.ModNone, iw.newItem); err != nil {
+		return err
+	}
+
+	if err := ui.SetKeybinding(iw.name, 'N', gocui.ModNone, iw.newItem); err != nil {
 		return err
 	}
 

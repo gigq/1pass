@@ -34,6 +34,10 @@ type ItemService interface {
 	ParseItemField(fromSection bool, data map[string]interface{}) *domain.ItemField
 
 	ParseItemSection(data map[string]interface{}) *domain.ItemSection
+
+	UpdateItem(vault *domain.Vault, keys *domain.Keys, item *domain.Item, payload *domain.ItemPayload) error
+
+	CreateItem(vault *domain.Vault, keys *domain.Keys, payload *domain.ItemPayload) (string, error)
 }
 
 type KeyService interface {
@@ -45,7 +49,13 @@ type KeyService interface {
 
 	DecodeOpdata(cipherText, key, macKey []byte) ([]byte, error)
 
+	EncodeData(key, initVector, data []byte) ([]byte, error)
+
+	EncodeOpdata(plain, key, macKey []byte) ([]byte, error)
+
 	DerivedKeys(password string) ([]byte, []byte, error)
+
+	EncryptItemKeys(itemKey, itemMac []byte, keys *domain.Keys) ([]byte, error)
 
 	ItemKeys(item *domain.RawItem, keys *domain.Keys) ([]byte, []byte)
 

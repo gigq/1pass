@@ -128,6 +128,33 @@ like passwords. If default OPVault is not configured,  [-v, --vault] flag is nee
 	detailsCmd.Flags().StringVarP(&cli.vault, "vault", "v", "", "OPVault path")
 	detailsCmd.Flags().BoolVarP(&cli.trashed, "trashed", "t", false, "search in trashed items")
 
+	editCmd := &cobra.Command{
+		Use:   "edit [UID]",
+		Short: "Edit an item stored in 1Password OPVault format",
+		Long: `Edit an item stored in 1Password OPVault format. The item is opened in your $EDITOR as JSON.
+If default OPVault is not configured, [-v, --vault] flag is needed.`,
+		Args: cobra.ExactArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			cli.cliControl.EditItem(cli.vault, args[0], cli.trashed)
+		},
+	}
+
+	editCmd.Flags().StringVarP(&cli.vault, "vault", "v", "", "OPVault path")
+	editCmd.Flags().BoolVarP(&cli.trashed, "trashed", "t", false, "edit trashed items")
+
+	newCmd := &cobra.Command{
+		Use:   "new",
+		Short: "Create a new item in the OPVault",
+		Long: `Create a new item in the OPVault. The item is opened in your $EDITOR as JSON.
+If default OPVault is not configured, [-v, --vault] flag is needed.`,
+		Run: func(cmd *cobra.Command, args []string) {
+			cli.cliControl.NewItem(cli.vault, cli.category)
+		},
+	}
+
+	newCmd.Flags().StringVarP(&cli.vault, "vault", "v", "", "OPVault path")
+	newCmd.Flags().StringVarP(&cli.category, "category", "c", "", "item category (name or 3-digit code)")
+
 	versionCmd := &cobra.Command{
 		Use:   "version",
 		Short: "Check application version",
@@ -143,6 +170,8 @@ like passwords. If default OPVault is not configured,  [-v, --vault] flag is nee
 	rootCmd.AddCommand(listCmd)
 	rootCmd.AddCommand(overviewCmd)
 	rootCmd.AddCommand(detailsCmd)
+	rootCmd.AddCommand(editCmd)
+	rootCmd.AddCommand(newCmd)
 	rootCmd.AddCommand(versionCmd)
 
 	return rootCmd
