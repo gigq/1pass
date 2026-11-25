@@ -7,8 +7,8 @@ package cobra
 import (
 	"bufio"
 	"encoding/json"
-	"io"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"os/exec"
