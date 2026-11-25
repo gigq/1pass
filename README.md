@@ -130,7 +130,11 @@ Provided commands:
 1pass details [-t] <uid> <path>
 1pass update
 1pass version
+1pass init <path>
+1pass new [-f <item.json>]
 ```
+
+**Non-interactive use:** the master password can come from `ONEPASS_PASSWORD`, from the file named by `ONEPASS_PASSWORD_FILE`, or from the first line of stdin when stdin is not a terminal, for example `security find-generic-password -s my.vault -w | 1pass list`. `1pass init <path>` creates a new empty OPVault, and `1pass new -f item.json` adds an item without opening `$EDITOR`.
 
 1. **configure** - interactive application configuration (answer the questions), use help command to see what can be configured
 2. **categories** - display list of OPVault item categories (for filtering purposes)

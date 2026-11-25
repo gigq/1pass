@@ -5,7 +5,9 @@
 package cobra
 
 import (
+	"bufio"
 	"encoding/json"
+	"io"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -35,6 +37,40 @@ func NewCobraCliControl(configFacade facade.ConfigFacade, updateFacade facade.Up
 		updateFacade: updateFacade,
 		vaultFacade:  vaultFacade,
 	}
+}
+
+// ReadPassword returns the vault password without needing an interactive
+// terminal when possible. Sources, in order: the ONEPASS_PASSWORD environment
+// variable, the file named by ONEPASS_PASSWORD_FILE, the first line of stdin
+// when stdin is not a terminal, and finally a hidden terminal prompt.
+func ReadPassword() ([]byte, error) {
+	if password, ok := os.LookupEnv("ONEPASS_PASSWORD"); ok {
+		return []byte(password), nil
+	}
+
+	if path := os.Getenv("ONEPASS_PASSWORD_FILE"); path != "" {
+		data, err := ioutil.ReadFile(path)
+
+		if err != nil {
+			return nil, err
+		}
+
+		return []byte(strings.TrimRight(string(data), "\r\n")), nil
+	}
+
+	if !term.IsTerminal(int(syscall.Stdin)) {
+		line, err := bufio.NewReader(os.Stdin).ReadString('\n')
+
+		if err != nil && err != io.EOF {
+			return nil, err
+		}
+
+		return []byte(strings.TrimRight(line, "\r\n")), nil
+	}
+
+	fmt.Fprintln(os.Stderr, "Password:")
+
+	return term.ReadPassword(int(syscall.Stdin))
 }
 
 func (ctrl *cobraCliControl) CheckForUpdate() {
@@ -148,8 +184,13 @@ func (ctrl *cobraCliControl) GetItemDetails(vaultPath, uid string, trashed bool)
 		os.Exit(1)
 	}
 
-	fmt.Println("Password:")
-	password, err := term.ReadPassword(int(syscall.Stdin))
+	password, err := ReadPassword()
+
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
 	err = ctrl.vaultFacade.Unlock(vault, string(password))
 
 	if err != nil {
@@ -229,8 +270,13 @@ func (ctrl *cobraCliControl) GetItemOverview(vaultPath, uid string, trashed bool
 		os.Exit(1)
 	}
 
-	fmt.Println("Password:")
-	password, err := term.ReadPassword(int(syscall.Stdin))
+	password, err := ReadPassword()
+
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
 	err = ctrl.vaultFacade.Unlock(vault, string(password))
 
 	if err != nil {
@@ -309,8 +355,13 @@ func (ctrl *cobraCliControl) GetItems(vaultPath, category, title string, trashed
 		os.Exit(1)
 	}
 
-	fmt.Println("Password:")
-	password, err := term.ReadPassword(int(syscall.Stdin))
+	password, err := ReadPassword()
+
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
 	err = ctrl.vaultFacade.Unlock(vault, string(password))
 
 	if err != nil {
@@ -368,8 +419,13 @@ func (ctrl *cobraCliControl) EditItem(vaultPath, uid string, trashed bool) {
 		os.Exit(1)
 	}
 
-	fmt.Println("Password:")
-	password, err := term.ReadPassword(int(syscall.Stdin))
+	password, err := ReadPassword()
+
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
 	err = ctrl.vaultFacade.Unlock(vault, string(password))
 
 	if err != nil {
@@ -407,7 +463,7 @@ func (ctrl *cobraCliControl) EditItem(vaultPath, uid string, trashed bool) {
 	fmt.Println("Item updated.")
 }
 
-func (ctrl *cobraCliControl) NewItem(vaultPath, category string) {
+func (ctrl *cobraCliControl) NewItem(vaultPath, category, file string) {
 	ctrl.FirstRun()
 	ctrl.CheckForUpdate()
 	var vault *domain.Vault
@@ -426,8 +482,13 @@ func (ctrl *cobraCliControl) NewItem(vaultPath, category string) {
 		os.Exit(1)
 	}
 
-	fmt.Println("Password:")
-	password, err := term.ReadPassword(int(syscall.Stdin))
+	password, err := ReadPassword()
+
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
 	err = ctrl.vaultFacade.Unlock(vault, string(password))
 
 	if err != nil {
@@ -435,8 +496,13 @@ func (ctrl *cobraCliControl) NewItem(vaultPath, category string) {
 		os.Exit(1)
 	}
 
-	template := newItemTemplate(category)
-	edited, err := editJson(template)
+	var edited map[string]interface{}
+
+	if file != "" {
+		edited, err = readJsonFile(file)
+	} else {
+		edited, err = editJson(newItemTemplate(category))
+	}
 
 	if err != nil {
 		fmt.Println(err)
@@ -637,8 +703,13 @@ func (ctrl *cobraCliControl) DebugItem(vaultPath, uid string, trashed bool) {
 		os.Exit(1)
 	}
 
-	fmt.Println("Password:")
-	password, err := term.ReadPassword(int(syscall.Stdin))
+	password, err := ReadPassword()
+
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
 	err = ctrl.vaultFacade.Unlock(vault, string(password))
 
 	if err != nil {
@@ -780,4 +851,24 @@ func rawMeta(raw map[string]interface{}) map[string]interface{} {
 	}
 
 	return meta
+}
+
+func readJsonFile(path string) (map[string]interface{}, error) {
+	data, err := ioutil.ReadFile(path)
+
+	if err != nil {
+		return nil, err
+	}
+
+	var result map[string]interface{}
+
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, err
+	}
+
+	if _, ok := result["category"]; !ok {
+		result["category"] = domain.ItemCategoryEnum.Login.GetCode()
+	}
+
+	return result, nil
 }
