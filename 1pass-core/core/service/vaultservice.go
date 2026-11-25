@@ -27,6 +27,12 @@ func NewDfltVaultService(itemRepo out.ItemRepo, profileRepo out.ProfileRepo) *df
 }
 
 func (s *dfltVaultService) ValidateVault(vault *domain.Vault) error {
+	if _, ok := domain.SqliteVaultPath(vault.Path); ok {
+		s.profileRepo.LoadProfile(vault)
+
+		return nil
+	}
+
 	info, err := os.Stat(vault.Path)
 
 	if err != nil {
