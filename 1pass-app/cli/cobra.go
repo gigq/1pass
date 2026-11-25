@@ -6,6 +6,7 @@ package cli
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/mashmb/1pass/1pass-app/gui"
 	"github.com/mashmb/1pass/1pass-core/port/in"
@@ -14,6 +15,7 @@ import (
 
 type cobraCli struct {
 	category   string
+	file       string
 	name       string
 	trashed    bool
 	vault      string
@@ -148,12 +150,30 @@ If default OPVault is not configured, [-v, --vault] flag is needed.`,
 		Long: `Create a new item in the OPVault. The item is opened in your $EDITOR as JSON.
 If default OPVault is not configured, [-v, --vault] flag is needed.`,
 		Run: func(cmd *cobra.Command, args []string) {
-			cli.cliControl.NewItem(cli.vault, cli.category)
+			cli.cliControl.NewItem(cli.vault, cli.category, cli.file)
 		},
 	}
 
 	newCmd.Flags().StringVarP(&cli.vault, "vault", "v", "", "OPVault path")
 	newCmd.Flags().StringVarP(&cli.category, "category", "c", "", "item category (name or 3-digit code)")
+	newCmd.Flags().StringVarP(&cli.file, "file", "f", "", "read the item JSON from a file instead of opening $EDITOR")
+
+	initCmd := &cobra.Command{
+		Use:   "init [PATH]",
+		Short: "Create a new, empty OPVault",
+		Long: `Create a new, empty OPVault at PATH (conventionally ending in .opvault).
+The master password is read the same way as for other commands: ONEPASS_PASSWORD,
+ONEPASS_PASSWORD_FILE, the first line of stdin, or a terminal prompt.`,
+		Args: cobra.ExactArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			if err := InitVault(args[0]); err != nil {
+				fmt.Println(err)
+				os.Exit(1)
+			}
+
+			fmt.Println("Vault created: " + args[0])
+		},
+	}
 
 	debugCmd := &cobra.Command{
 		Use:   "debug [UID]",
@@ -186,6 +206,7 @@ If default OPVault is not configured, [-v, --vault] flag is needed.`,
 	rootCmd.AddCommand(detailsCmd)
 	rootCmd.AddCommand(editCmd)
 	rootCmd.AddCommand(newCmd)
+	rootCmd.AddCommand(initCmd)
 	rootCmd.AddCommand(debugCmd)
 	rootCmd.AddCommand(versionCmd)
 

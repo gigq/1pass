@@ -101,6 +101,17 @@ func (s *dfltItemService) DecodeItems(vault *domain.Vault, keys *domain.Keys) {
 				}
 			}
 
+			// Password-category items keep their secret at the top level of details.
+			if password, ok := detailsJson["password"].(string); ok && password != "" {
+				field := domain.NewItemField("password", password)
+
+				if fieldsSection == nil {
+					fieldsSection = domain.NewItemSection("", []*domain.ItemField{field})
+				} else {
+					fieldsSection.Fields = append(fieldsSection.Fields, field)
+				}
+			}
+
 			if fieldsSection != nil {
 				sections = append([]*domain.ItemSection{fieldsSection}, sections...)
 			}

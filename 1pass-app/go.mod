@@ -15,6 +15,7 @@ require (
 	github.com/mashmb/1pass/1pass-up v1.1.2
 	github.com/nsf/termbox-go v1.1.1 // indirect
 	github.com/spf13/cobra v1.1.3
+	golang.org/x/crypto v0.0.0-20210421170649-83a5a9bb288b
 )
 
 replace (

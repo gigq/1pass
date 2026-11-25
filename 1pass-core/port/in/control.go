@@ -25,7 +25,7 @@ type CliControl interface {
 
 	EditItem(vaultPath, uid string, trashed bool)
 
-	NewItem(vaultPath, category string)
+	NewItem(vaultPath, category, file string)
 
 	DebugItem(vaultPath, uid string, trashed bool)
 
