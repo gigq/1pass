@@ -17,6 +17,7 @@ import (
 	"github.com/mashmb/1pass/1pass-core/port/in"
 	"github.com/mashmb/1pass/1pass-core/port/out"
 	"github.com/mashmb/1pass/1pass-parse/repo/file"
+	"github.com/mashmb/1pass/1pass-parse/repo/sqlite"
 	"github.com/mashmb/1pass/1pass-parse/util/pbkdf2"
 	"github.com/mashmb/1pass/1pass-term/control/cobra"
 	"github.com/mashmb/1pass/1pass-term/control/gocui"
@@ -53,8 +54,8 @@ func main() {
 
 	configRepo = file.NewFileConfigRepo(configDir)
 	cryptoUtils = pbkdf2.NewPbkdf2CryptoUtils()
-	itemRepo = file.NewFileItemRepo()
-	profileRepo = file.NewFileProfileRepo()
+	itemRepo = sqlite.NewAutoItemRepo(file.NewFileItemRepo())
+	profileRepo = sqlite.NewAutoProfileRepo(file.NewFileProfileRepo())
 	updater = github.NewGithubUpdater()
 
 	configService = service.NewDfltConfigService(configRepo)

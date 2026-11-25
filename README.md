@@ -240,3 +240,13 @@ tests(#11): unit tests of get item overview
 Look at the repository commits, you will handle it.
 
 Every pull request will be discussed with me and merged to **develop** after acceptation (unit tests are welcome).
+
+## 1Password 7 SQLite (iCloud / CloudKit) vaults
+
+Point `-v` (or `opvault:` in `1pass.yml`) at 1Password 7's data folder or its `OnePassword.sqlite`:
+
+```
+~/Library/Group Containers/2BUA8C4S2C.com.agilebits/Library/Application Support/1Password/Data
+```
+
+1pass copies the database to a private temp folder, reads the `default` profile (override with `ONEPASS_SQLITE_PROFILE=<name or uuid>`) and decrypts items with the vault's master password. These vaults are read-only here; add and edit items in 1Password, which syncs them through CloudKit. Reading the Group Container needs Full Disk Access for the calling process.
