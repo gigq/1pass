@@ -6,6 +6,8 @@ package gui
 
 import (
 	"fmt"
+	"io/ioutil"
+	"os"
 	"sort"
 	"strings"
 
@@ -21,6 +23,7 @@ Open: ENTER`
 )
 
 type onepassWidget struct {
+	envTried    bool
 	currIdx     int
 	name        string
 	title       string
@@ -221,6 +224,15 @@ func (ow *onepassWidget) applySearch(ui *gocui.Gui, query string) error {
 }
 
 func (ow *onepassWidget) update(ui *gocui.Gui) error {
+	// Unlock once from ONEPASS_PASSWORD / ONEPASS_PASSWORD_FILE when set; fall back to the prompt.
+	if !ow.envTried && !ow.guiControl.IsVaultUnlocked() {
+		ow.envTried = true
+
+		if password, ok := envPassword(); ok {
+			ow.guiControl.Unlock(ow.vault, password)
+		}
+	}
+
 	if ow.guiControl.IsVaultUnlocked() {
 		maxX, _ := ui.Size()
 		view, err := ui.View(ow.name)
@@ -376,4 +388,18 @@ func (ow *onepassWidget) Layout(ui *gocui.Gui) error {
 	}
 
 	return nil
+}
+
+func envPassword() (string, bool) {
+	if password, ok := os.LookupEnv("ONEPASS_PASSWORD"); ok && password != "" {
+		return password, true
+	}
+
+	if path := os.Getenv("ONEPASS_PASSWORD_FILE"); path != "" {
+		if data, err := ioutil.ReadFile(path); err == nil {
+			return strings.TrimRight(string(data), "\r\n"), true
+		}
+	}
+
+	return "", false
 }
